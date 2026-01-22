@@ -82,7 +82,7 @@ export async function GET(request: Request) {
             .lte("updated_at", to);
 
         const desglosePorDesarrollo: Record<string, number> = {};
-        (porDesarrollo || []).forEach(lead => {
+        (porDesarrollo || []).forEach((lead: any) => {
             const dev = lead.desarrollo || lead.pipeline_name || "Sin desarrollo";
             desglosePorDesarrollo[dev] = (desglosePorDesarrollo[dev] || 0) + 1;
         });
@@ -137,7 +137,7 @@ export async function GET(request: Request) {
             .lte("updated_at", to);
 
         const desgloseVisitadosPorDesarrollo: Record<string, number> = {};
-        (visitadosPorDesarrollo || []).forEach(lead => {
+        (visitadosPorDesarrollo || []).forEach((lead: any) => {
             const dev = lead.desarrollo || lead.pipeline_name || "Sin desarrollo";
             desgloseVisitadosPorDesarrollo[dev] = (desgloseVisitadosPorDesarrollo[dev] || 0) + 1;
         });
