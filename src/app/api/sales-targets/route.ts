@@ -27,7 +27,7 @@ async function updateTodosTarget(mes: number, anio: number) {
 
         // Calcular las sumas
         const totals = individualTargets.reduce(
-            (acc, target) => ({
+            (acc: any, target: any) => ({
                 meta_leads: acc.meta_leads + (target.meta_leads || 0),
                 meta_citas: acc.meta_citas + (target.meta_citas || 0),
                 meta_apartados: acc.meta_apartados + (target.meta_apartados || 0),

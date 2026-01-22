@@ -147,7 +147,7 @@ export async function getDashboardStats(filters: {
             }
 
             // Obtener lead_ids únicos
-            const leadIds = [...new Set(events.map(e => e.lead_id))];
+            const leadIds = [...new Set(events.map((e: any) => e.lead_id))];
 
             // Contar leads que tienen el checkbox actualmente marcado Y están en los pipelines correctos
             let query = supabase
@@ -211,7 +211,7 @@ export async function getDashboardStats(filters: {
             }
 
             // Obtener lead_ids únicos
-            const leadIds = [...new Set(events.map(e => e.lead_id))];
+            const leadIds = [...new Set(events.map((e: any) => e.lead_id))];
 
             // Contar leads que tienen el checkbox actualmente marcado Y están en los pipelines correctos
             let query = supabase
@@ -513,7 +513,7 @@ export async function getFilterOptions() {
     let asesoresSet = new Set<string>();
 
     // Procesar usuarios de la tabla users
-    (usersData || []).forEach(user => {
+    (usersData || []).forEach((user: any) => {
         if (user.name && !admins.includes(user.name)) {
             asesoresSet.add(user.name);
 
@@ -542,7 +542,7 @@ export async function getFilterOptions() {
     };
 
     // Aplicar fallback por email si no hay desarrollo asignado
-    (usersData || []).forEach(user => {
+    (usersData || []).forEach((user: any) => {
         if (user.name && !admins.includes(user.name) && user.email) {
             const email = user.email.toLowerCase();
             const desarrolloFromEmail = EMAIL_TO_DESARROLLO[email];
@@ -635,7 +635,7 @@ export async function getMarketingSpend(filters: {
     if (error) throw error;
 
     // Calcular CPL (Costo por Lead)
-    const dataWithCPL = (data || []).map(row => ({
+    const dataWithCPL = (data || []).map((row: any) => ({
         ...row,
         cpl: row.leads_generados > 0 ? (row.gasto / row.leads_generados).toFixed(2) : "0.00"
     }));
@@ -709,7 +709,7 @@ export async function getRemarketingMetrics(filters: {
     if (error) throw error;
 
     // Calcular tasa de recuperación
-    const dataWithRates = (data || []).map(row => ({
+    const dataWithRates = (data || []).map((row: any) => ({
         ...row,
         tasa_recuperacion: row.leads_en_rmkt > 0
             ? ((row.citas_recuperadas / row.leads_en_rmkt) * 100).toFixed(2)
@@ -766,7 +766,7 @@ export async function getAdvisorPerformance(filters: {
 
     // Crear mapeo de nombre de asesor a desarrollo
     const asesorToDesarrollo: { [name: string]: string } = {};
-    (usersData || []).forEach(user => {
+    (usersData || []).forEach((user: any) => {
         if (user.name) {
             // Prioridad: campo desarrollo de BD, luego email
             const desarrolloFromDB = user.desarrollo;
@@ -894,6 +894,6 @@ export async function getAvailableChannels() {
 
     if (error) throw error;
 
-    const uniqueChannels = [...new Set((data || []).map(d => d.canal))];
+    const uniqueChannels = [...new Set((data || []).map((d: any) => d.canal))];
     return uniqueChannels;
 }
