@@ -1,0 +1,11 @@
+node_modules
+.next
+.env
+.env.*
+.vercel
+.git
+.gitignore
+logs/
+documentos/
+README.md
+test-*.js
