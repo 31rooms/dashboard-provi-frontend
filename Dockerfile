@@ -13,6 +13,8 @@ COPY . .
 ENV NEXT_PUBLIC_SUPABASE_URL=https://ztnfwtvvqefuahcgovru.supabase.co
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_secret_Ak9WkeNjns5_ST03dzwYXw_TBo8uKco
 ENV NEXT_PUBLIC_API_URL=https://api-dashboard.grupoprovi.mx
+ENV SUPABASE_URL=https://ztnfwtvvqefuahcgovru.supabase.co
+ENV SUPABASE_SERVICE_ROLE_KEY=sb_secret_Ak9WkeNjns5_ST03dzwYXw_TBo8uKco
 ENV NODE_OPTIONS=--max_old_space_size=4096
 
 RUN npm run build
