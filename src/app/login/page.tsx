@@ -1,11 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { loginAction } from "./actions";
-import { Lock, User, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const MAX_ATTEMPTS = 4;
+const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 minutos
+const STORAGE_KEY = "login_attempts";
+
+function getLoginAttempts(): { count: number; lockedUntil: number | null } {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+    } catch {}
+    return { count: 0, lockedUntil: null };
+}
+
+function setLoginAttempts(data: { count: number; lockedUntil: number | null }) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {}
+}
+
+function clearLoginAttempts() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+}
 
 export default function LoginPage() {
     const [username, setUsername] = useState("");
@@ -13,10 +37,38 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [locked, setLocked] = useState(false);
     const router = useRouter();
+
+    // Verificar estado de bloqueo al montar
+    useEffect(() => {
+        const attempts = getLoginAttempts();
+        if (attempts.lockedUntil && Date.now() < attempts.lockedUntil) {
+            setLocked(true);
+            setError("Demasiados intentos fallidos. Contacte al administrador.");
+            const remaining = attempts.lockedUntil - Date.now();
+            const timer = setTimeout(() => {
+                setLocked(false);
+                setError("");
+                clearLoginAttempts();
+            }, remaining);
+            return () => clearTimeout(timer);
+        } else if (attempts.lockedUntil) {
+            clearLoginAttempts();
+        }
+    }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Verificar bloqueo
+        const attempts = getLoginAttempts();
+        if (attempts.lockedUntil && Date.now() < attempts.lockedUntil) {
+            setLocked(true);
+            setError("Demasiados intentos fallidos. Contacte al administrador.");
+            return;
+        }
+
         setLoading(true);
         setError("");
 
@@ -27,10 +79,20 @@ export default function LoginPage() {
         try {
             const result = await loginAction(formData);
             if (result.success) {
+                clearLoginAttempts();
                 router.push("/dashboard");
-                router.refresh(); // Ensure the layout/segments pick up the cookie
+                router.refresh();
             } else {
-                setError(result.error || "Error al iniciar sesión");
+                const newCount = attempts.count + 1;
+                if (newCount >= MAX_ATTEMPTS) {
+                    const lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+                    setLoginAttempts({ count: newCount, lockedUntil });
+                    setLocked(true);
+                    setError("Demasiados intentos fallidos. Contacte al administrador.");
+                } else {
+                    setLoginAttempts({ count: newCount, lockedUntil: null });
+                    setError(result.error || "Error al iniciar sesión");
+                }
                 setLoading(false);
             }
         } catch (err) {
@@ -63,17 +125,17 @@ export default function LoginPage() {
 
                     <form onSubmit={handleLogin} className="p-8 pt-4 space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2 ml-1">Usuario</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2 ml-1">Correo electrónico</label>
                             <div className="relative group">
                                 <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 group-focus-within:text-orange-500 transition-colors">
-                                    <User size={18} />
+                                    <Mail size={18} />
                                 </span>
                                 <input
-                                    type="text"
+                                    type="email"
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     className="w-full bg-slate-100/50 border border-transparent focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 rounded-2xl py-3.5 pl-11 pr-4 text-slate-800 placeholder-slate-400 transition-all outline-none"
-                                    placeholder="Tu usuario"
+                                    placeholder="tu@correo.com"
                                     required
                                 />
                             </div>
@@ -111,7 +173,7 @@ export default function LoginPage() {
 
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || locked}
                             className={cn(
                                 "w-full bg-slate-900 text-white font-semibold py-4 rounded-2xl shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none flex items-center justify-center gap-2",
                                 loading && "bg-slate-800"

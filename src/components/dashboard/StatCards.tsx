@@ -106,7 +106,7 @@ export function KPIStatsCards({ stats, tab = "direccion" }: { stats: any; tab?: 
         const budget = stats.budgetByDesarrollo?.total || 135000; // Presupuesto de muestra
 
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                     title="Nuevos Leads"
                     value={totalLeads}

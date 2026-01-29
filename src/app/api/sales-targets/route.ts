@@ -98,7 +98,7 @@ export async function GET(request: Request) {
     } catch (error: any) {
         console.error("Error fetching sales targets:", error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: process.env.NODE_ENV === "development" ? error.message : "Error interno del servidor" },
             { status: 500 }
         );
     }
@@ -174,7 +174,7 @@ export async function POST(request: Request) {
     } catch (error: any) {
         console.error("Error creating sales target:", error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: process.env.NODE_ENV === "development" ? error.message : "Error interno del servidor" },
             { status: 500 }
         );
     }
@@ -247,7 +247,7 @@ export async function PUT(request: Request) {
     } catch (error: any) {
         console.error("Error updating sales target:", error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: process.env.NODE_ENV === "development" ? error.message : "Error interno del servidor" },
             { status: 500 }
         );
     }
@@ -302,7 +302,7 @@ export async function DELETE(request: Request) {
     } catch (error: any) {
         console.error("Error deleting sales target:", error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: process.env.NODE_ENV === "development" ? error.message : "Error interno del servidor" },
             { status: 500 }
         );
     }

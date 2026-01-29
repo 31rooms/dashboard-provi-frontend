@@ -10,16 +10,22 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ENV NEXT_PUBLIC_SUPABASE_URL=https://ztnfwtvvqefuahcgovru.supabase.co
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_secret_Ak9WkeNjns5_ST03dzwYXw_TBo8uKco
-ENV NEXT_PUBLIC_API_URL=https://api-dashboard.grupoprovi.mx
-ENV SUPABASE_URL=https://ztnfwtvvqefuahcgovru.supabase.co
-ENV SUPABASE_SERVICE_ROLE_KEY=sb_secret_Ak9WkeNjns5_ST03dzwYXw_TBo8uKco
+# Solo las variables NEXT_PUBLIC_* se necesitan en build time
+# (se incrustan en el bundle JS del cliente, son publicas)
+# Configurarlas como "Build Arguments" en EasyPanel
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NODE_OPTIONS=--max_old_space_size=4096
 
 RUN npm run build
 
 # Stage 3: Production runner
+# Las variables server-side (SUPABASE_SERVICE_ROLE_KEY, KOMMO_ACCESS_TOKEN, etc.)
+# se inyectan en RUNTIME por EasyPanel como "Environment Variables"
 FROM node:22-alpine AS runner
 WORKDIR /app
 

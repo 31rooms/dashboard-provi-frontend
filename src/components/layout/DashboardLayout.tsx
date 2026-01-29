@@ -202,7 +202,6 @@ export default function DashboardLayout({
                     <div className="flex items-center gap-4">
                         <div className="hidden sm:flex flex-col text-right">
                             <span className="text-sm font-semibold text-slate-800 uppercase">Administrador</span>
-                            <span className="text-xs text-slate-400">isra@provi.mx</span>
                         </div>
                         <div className="h-10 w-10 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold ring-4 ring-slate-50">
                             AD

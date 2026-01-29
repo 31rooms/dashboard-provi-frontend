@@ -19,6 +19,9 @@ export async function GET(request: Request) {
         return NextResponse.json(stats);
     } catch (error: any) {
         console.error("API Stats error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(
+            { error: process.env.NODE_ENV === "development" ? error.message : "Error interno del servidor" },
+            { status: 500 }
+        );
     }
 }

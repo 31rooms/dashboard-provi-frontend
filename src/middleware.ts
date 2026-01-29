@@ -1,31 +1,40 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Valor esperado de la cookie de autenticación
 const AUTH_SESSION_VALUE = 'authenticated';
+const INACTIVITY_TIMEOUT_MS = 3 * 24 * 60 * 60 * 1000; // 3 dias en ms
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const authSession = request.cookies.get('auth_session');
+    const lastActivity = request.cookies.get('last_activity');
 
-    // Validar que la cookie tenga el valor correcto (no solo que exista)
     const isAuthenticated = authSession?.value === AUTH_SESSION_VALUE;
 
-    // Protection for dashboard routes
+    // Verificar timeout por inactividad
+    if (isAuthenticated && lastActivity?.value) {
+        const lastTime = parseInt(lastActivity.value, 10);
+        if (!isNaN(lastTime) && Date.now() - lastTime > INACTIVITY_TIMEOUT_MS) {
+            // Sesion expirada por inactividad
+            const response = NextResponse.redirect(new URL('/login', request.url));
+            response.cookies.delete('auth_session');
+            response.cookies.delete('last_activity');
+            return response;
+        }
+    }
+
+    // Proteger rutas del dashboard
     if (pathname.startsWith('/dashboard')) {
         if (!isAuthenticated) {
             return NextResponse.redirect(new URL('/login', request.url));
         }
     }
 
-    // Protection for API routes (except public ones)
-    // /api/sync GET es público (health check), pero POST requiere auth (manejado en el endpoint)
+    // Proteger rutas API (excepto publicas)
     const isPublicApi = pathname === '/api/health' ||
                         (pathname === '/api/sync' && request.method === 'GET');
 
     if (pathname.startsWith('/api/') && !isPublicApi) {
-        // El endpoint /api/sync POST maneja su propia auth (cookie o API key)
-        // Los demás endpoints requieren cookie de sesión
         if (pathname !== '/api/sync' && !isAuthenticated) {
             return NextResponse.json(
                 { error: 'No autorizado' },
@@ -34,7 +43,7 @@ export function middleware(request: NextRequest) {
         }
     }
 
-    // Redirect root to login if not authenticated, or to dashboard if authenticated
+    // Redirigir raiz
     if (pathname === '/') {
         if (isAuthenticated) {
             return NextResponse.redirect(new URL('/dashboard', request.url));
@@ -42,17 +51,26 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Add security headers to response
     const response = NextResponse.next();
 
-    // Prevenir clickjacking
+    // Actualizar cookie de ultima actividad en cada request autenticado
+    if (isAuthenticated && pathname.startsWith('/dashboard')) {
+        response.cookies.set('last_activity', Date.now().toString(), {
+            path: '/',
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 3 * 24 * 60 * 60, // 3 dias
+        });
+    }
+
+    // Security headers
     response.headers.set('X-Frame-Options', 'DENY');
-    // Prevenir MIME type sniffing
     response.headers.set('X-Content-Type-Options', 'nosniff');
-    // Prevenir XSS reflection attacks
     response.headers.set('X-XSS-Protection', '1; mode=block');
-    // Referrer policy
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
     return response;
 }

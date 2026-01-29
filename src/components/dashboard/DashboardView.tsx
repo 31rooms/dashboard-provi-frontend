@@ -353,29 +353,20 @@ export default function DashboardView({
                                                     <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Citas</th>
                                                     <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Apartados</th>
                                                     <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Monto Total</th>
-                                                    <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">% Conversión</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="bg-white divide-y divide-slate-50">
-                                                {stats.leadsByChannel.map((row: any, idx: number) => {
-                                                    const conversionPct = row.total_leads > 0 ? ((row.apartados / row.total_leads) * 100).toFixed(1) : "0.0";
-                                                    return (
-                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                            <td className="px-6 py-4 text-sm font-bold text-slate-900">{row.canal}</td>
-                                                            <td className="px-6 py-4 text-sm text-center font-semibold text-blue-600">{row.total_leads || 0}</td>
-                                                            <td className="px-6 py-4 text-sm text-center text-slate-700">{row.citas || 0}</td>
-                                                            <td className="px-6 py-4 text-sm text-center text-slate-700">{row.apartados || 0}</td>
-                                                            <td className="px-6 py-4 text-sm text-right font-mono font-bold text-slate-900">
-                                                                ${(row.monto_total || 0).toLocaleString("es-MX")}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center">
-                                                                <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs font-bold">
-                                                                    {conversionPct}%
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
+                                                {stats.leadsByChannel.map((row: any, idx: number) => (
+                                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                        <td className="px-6 py-4 text-sm font-bold text-slate-900">{row.canal}</td>
+                                                        <td className="px-6 py-4 text-sm text-center font-semibold text-blue-600">{row.total_leads || 0}</td>
+                                                        <td className="px-6 py-4 text-sm text-center text-slate-700">{row.citas || 0}</td>
+                                                        <td className="px-6 py-4 text-sm text-center text-slate-700">{row.apartados || 0}</td>
+                                                        <td className="px-6 py-4 text-sm text-right font-mono font-bold text-slate-900">
+                                                            ${(row.monto_total || 0).toLocaleString("es-MX")}
+                                                        </td>
+                                                    </tr>
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>
