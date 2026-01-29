@@ -38,6 +38,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Crear directorio de logs con permisos del usuario nextjs
+RUN mkdir -p /app/logs && chown nextjs:nodejs /app/logs
+
 USER nextjs
 
 EXPOSE 3000

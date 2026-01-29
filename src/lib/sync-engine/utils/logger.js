@@ -4,13 +4,19 @@ import path from 'path';
 class Logger {
     constructor() {
         this.logFile = path.join(process.cwd(), 'logs', 'sync.log');
-        this.ensureLogDir();
+        this.canWriteFile = this.ensureLogDir();
     }
 
     ensureLogDir() {
-        const logDir = path.dirname(this.logFile);
-        if (!fs.existsSync(logDir)) {
-            fs.mkdirSync(logDir, { recursive: true });
+        try {
+            const logDir = path.dirname(this.logFile);
+            if (!fs.existsSync(logDir)) {
+                fs.mkdirSync(logDir, { recursive: true });
+            }
+            return true;
+        } catch {
+            // En contenedores sin permisos de escritura, solo usar console
+            return false;
         }
     }
 
@@ -21,11 +27,16 @@ class Logger {
         console.log(logMessage);
         if (data) console.log(data);
 
-        const fileMessage = data
-            ? `${logMessage}\n${JSON.stringify(data, null, 2)}\n`
-            : `${logMessage}\n`;
+        if (!this.canWriteFile) return;
 
-        fs.appendFileSync(this.logFile, fileMessage);
+        try {
+            const fileMessage = data
+                ? `${logMessage}\n${JSON.stringify(data, null, 2)}\n`
+                : `${logMessage}\n`;
+            fs.appendFileSync(this.logFile, fileMessage);
+        } catch {
+            // Si falla la escritura, silenciar y solo usar console
+        }
     }
 
     info(message, data) { this.log('info', message, data); }
