@@ -20,7 +20,7 @@ export class SupabaseService {
 
         // Obtener los leads existentes para detectar cambios en checkboxes
         const leadIds = leads.map(l => l.id);
-        const { data: existingLeads, error: fetchError } = await supabase
+        const { data: existingLeads, error: fetchError } = await this.supabase
             .from('leads')
             .select('id, is_cita_agendada, is_visitado, cita_agendada_at, visitado_at')
             .in('id', leadIds);
@@ -104,7 +104,7 @@ export class SupabaseService {
     }
 
     async getLastSyncTimestamp() {
-        const { data, error } = await supabase
+        const { data, error } = await this.supabase
             .from('leads')
             .select('updated_at')
             .order('updated_at', { ascending: false })
@@ -145,7 +145,7 @@ export class SupabaseService {
         let hasMore = true;
 
         while (hasMore) {
-            const { data, error } = await supabase
+            const { data, error } = await this.supabase
                 .from('leads')
                 .select('id')
                 .range(from, from + step - 1);
