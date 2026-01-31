@@ -1,12 +1,12 @@
-import { supabase } from '../config/supabase.js';
+import { getSupabase } from '../config/supabase.js';
 
 export class SupabaseService {
     constructor() {
-        this.supabase = supabase;
+        this.supabase = getSupabase();
     }
     async testConnection() {
         try {
-            const { data, error } = await supabase.from('leads').select('id').limit(1);
+            const { data, error } = await this.supabase.from('leads').select('id').limit(1);
             if (error) throw error;
             return true;
         } catch (error) {
@@ -75,31 +75,31 @@ export class SupabaseService {
             return lead;
         });
 
-        const { error } = await supabase.from('leads').upsert(processedLeads, { onConflict: 'id' });
+        const { error } = await this.supabase.from('leads').upsert(processedLeads, { onConflict: 'id' });
         if (error) throw error;
     }
 
     async upsertEvents(events) {
         if (!events || events.length === 0) return;
-        const { error } = await supabase.from('events').upsert(events, { onConflict: 'id' });
+        const { error } = await this.supabase.from('events').upsert(events, { onConflict: 'id' });
         if (error) throw error;
     }
 
     async upsertUsers(users) {
         if (!users || users.length === 0) return;
-        const { error } = await supabase.from('users').upsert(users, { onConflict: 'id' });
+        const { error } = await this.supabase.from('users').upsert(users, { onConflict: 'id' });
         if (error) throw error;
     }
 
     async upsertPipelines(pipelines) {
         if (!pipelines || pipelines.length === 0) return;
-        const { error } = await supabase.from('pipelines').upsert(pipelines, { onConflict: 'id' });
+        const { error } = await this.supabase.from('pipelines').upsert(pipelines, { onConflict: 'id' });
         if (error) throw error;
     }
 
     async upsertPipelineStatuses(statuses) {
         if (!statuses || statuses.length === 0) return;
-        const { error } = await supabase.from('pipeline_statuses').upsert(statuses, { onConflict: 'id' });
+        const { error } = await this.supabase.from('pipeline_statuses').upsert(statuses, { onConflict: 'id' });
         if (error) throw error;
     }
 
@@ -116,7 +116,7 @@ export class SupabaseService {
 
     async calculateResponseTimes() {
         console.log('   └─ Pasando a: Tiempos de Respuesta...');
-        const { error } = await supabase.rpc('calculate_response_times');
+        const { error } = await this.supabase.rpc('calculate_response_times');
         if (error) {
             if (error.message.includes('timeout')) {
                 console.warn('   ⚠️ Timeout detectado en Tiempos de Respuesta. Se recomienda optimización SQL.');
@@ -128,7 +128,7 @@ export class SupabaseService {
 
     async calculateConversions() {
         console.log('   └─ Pasando a: Conversiones...');
-        const { error } = await supabase.rpc('calculate_conversions');
+        const { error } = await this.supabase.rpc('calculate_conversions');
         if (error) {
             if (error.message.includes('timeout')) {
                 console.warn('   ⚠️ Timeout detectado en Conversiones. Se recomienda optimización SQL.');
@@ -163,7 +163,7 @@ export class SupabaseService {
     }
 
     async getAllEventIds() {
-        const { data, error } = await supabase.from('events').select('id');
+        const { data, error } = await this.supabase.from('events').select('id');
         if (error) throw error;
         return new Set(data.map(e => e.id));
     }
