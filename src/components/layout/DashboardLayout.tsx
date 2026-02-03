@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -12,8 +12,11 @@ import {
     LogOut,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Menu,
-    X
+    X,
+    Settings,
+    Radio
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +41,78 @@ const SidebarItem = ({ icon: Icon, label, href, active, collapsed }: SidebarItem
     >
         <Icon size={20} className={cn("shrink-0", active ? "text-orange-400" : "group-hover:text-slate-900")} />
         {!collapsed && <span className="font-medium truncate">{label}</span>}
+    </Link>
+);
+
+interface SidebarGroupProps {
+    icon: React.ElementType;
+    label: string;
+    children: React.ReactNode;
+    active?: boolean;
+    collapsed?: boolean;
+    defaultOpen?: boolean;
+}
+
+const SidebarGroup = ({ icon: Icon, label, children, active, collapsed, defaultOpen = false }: SidebarGroupProps) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+
+    if (collapsed) {
+        return (
+            <div className="relative group">
+                <button
+                    className={cn(
+                        "flex items-center justify-center w-full px-2 py-3 rounded-2xl transition-all duration-200",
+                        active
+                            ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
+                            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    )}
+                >
+                    <Icon size={20} className={cn("shrink-0", active ? "text-orange-400" : "group-hover:text-slate-900")} />
+                </button>
+                <div className="absolute left-full top-0 ml-2 hidden group-hover:block bg-white border border-slate-200 rounded-xl shadow-lg py-2 min-w-[180px] z-50">
+                    <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase">{label}</div>
+                    {children}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={cn(
+                    "flex items-center gap-3 w-full px-4 py-3 rounded-2xl transition-all duration-200 group",
+                    active
+                        ? "bg-slate-800 text-white"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                )}
+            >
+                <Icon size={20} className={cn("shrink-0", active ? "text-orange-400" : "group-hover:text-slate-900")} />
+                <span className="font-medium truncate flex-1 text-left">{label}</span>
+                <ChevronDown size={16} className={cn("transition-transform", isOpen && "rotate-180")} />
+            </button>
+            {isOpen && (
+                <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-100 pl-4">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SidebarSubItem = ({ icon: Icon, label, href, active }: Omit<SidebarItemProps, "collapsed">) => (
+    <Link
+        href={href}
+        className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-200 text-sm",
+            active
+                ? "bg-slate-900 text-white"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        )}
+    >
+        <Icon size={16} className={cn("shrink-0", active ? "text-orange-400" : "")} />
+        <span className="truncate">{label}</span>
     </Link>
 );
 
@@ -119,6 +194,21 @@ export default function DashboardLayout({
                         active={pathname === "/dashboard/ventas"}
                         collapsed={collapsed}
                     />
+
+                    <SidebarGroup
+                        icon={Settings}
+                        label="Configuración"
+                        active={pathname.startsWith("/dashboard/configuracion")}
+                        collapsed={collapsed}
+                        defaultOpen={pathname.startsWith("/dashboard/configuracion")}
+                    >
+                        <SidebarSubItem
+                            icon={Radio}
+                            label="Canales"
+                            href="/dashboard/configuracion/canales"
+                            active={pathname === "/dashboard/configuracion/canales"}
+                        />
+                    </SidebarGroup>
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 space-y-2">
@@ -171,6 +261,7 @@ export default function DashboardLayout({
                     <SidebarItem icon={LayoutDashboard} label="Dirección" href="/dashboard" active={pathname === "/dashboard"} />
                     <SidebarItem icon={Target} label="Marketing" href="/dashboard/marketing" active={pathname === "/dashboard/marketing"} />
                     <SidebarItem icon={Users} label="Ventas" href="/dashboard/ventas" active={pathname === "/dashboard/ventas"} />
+                    <SidebarItem icon={Settings} label="Configuración" href="/dashboard/configuracion/canales" active={pathname.startsWith("/dashboard/configuracion")} />
                 </nav>
                 <div className="p-4 border-t border-slate-100">
                     <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all">

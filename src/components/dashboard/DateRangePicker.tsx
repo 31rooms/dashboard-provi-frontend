@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
+import { useState, useRef, useEffect } from "react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isWithinInterval, startOfDay, endOfDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -44,7 +44,7 @@ export function DateRangePicker({ from, to, onSelect }: DateRangePickerProps) {
 
     // Padding for the start of the month
     const firstDayOfWeek = startOfMonth(currentMonth).getDay();
-    const padding = Array.from({ length: firstDayOfWeek }).map((_, i) => null);
+    const padding = Array.from({ length: firstDayOfWeek }).map(() => null);
 
     const handleDayClick = (day: Date) => {
         if (!tempRange.from || (tempRange.from && tempRange.to)) {
@@ -115,8 +115,8 @@ export function DateRangePicker({ from, to, onSelect }: DateRangePickerProps) {
                     </div>
 
                     <div className="grid grid-cols-7 gap-1 mb-2">
-                        {weekDays.map(d => (
-                            <div key={d} className="text-[10px] font-bold text-slate-400 text-center py-2">
+                        {weekDays.map((d, idx) => (
+                            <div key={`weekday-${idx}`} className="text-[10px] font-bold text-slate-400 text-center py-2">
                                 {d}
                             </div>
                         ))}

@@ -116,7 +116,7 @@ export async function getDashboardStats(filters: {
             total_citas: data.filter(l => l.is_cita_agendada).length,
             total_visitas: data.filter(l => l.is_visitado).length,
             total_apartados: data.filter(l => l.status_name === 'Apartado Realizado' || l.status_name === 'Apartado').length,
-            total_ventas: data.filter(l => l.closed_at && !['Ventas Perdidos', 'Closed - lost'].includes(l.status_name)).length
+            total_ventas: data.filter(l => l.closed_at && l.status_id === 142).length  // 142 = Ganado/Firmado
         };
         return [{ ...stats, desarrollo: filters.desarrollo || 'Global' }];
     };
@@ -254,19 +254,152 @@ export async function getDashboardStats(filters: {
         }
     };
 
-    const [current, prevCount, performance, marketing, rmkt, appointmentsCount, visitedCount] = await Promise.all([
+    const fetchKommoSources = async () => {
+        const { data, error } = await supabase
+            .from("kommo_sources")
+            .select("source_id, source_name, source_type");
+        if (error) {
+            console.error("Error fetching kommo sources:", error);
+            return [];
+        }
+        return data || [];
+    };
+
+    const fetchUsers = async () => {
+        const { data, error } = await supabase
+            .from("users")
+            .select("id, name");
+        if (error) {
+            console.error("Error fetching users:", error);
+            return [];
+        }
+        return data || [];
+    };
+
+    const [current, prevCount, performance, marketing, rmkt, appointmentsCount, visitedCount, kommoSources, usersData] = await Promise.all([
         fetchCurrentLeads(),
         fetchPreviousLeads(),
         fetchUserPerformance(),
         fetchMarketingMetrics(),
         fetchRemarketingStats(),
         fetchAppointments(),
-        fetchVisited()
+        fetchVisited(),
+        fetchKommoSources(),
+        fetchUsers()
     ]);
 
     const funnel = calculateFunnelFromData(current.data || []);
     const totalLeads = current.count;
     const totalAmount = current.data?.reduce((acc, current) => acc + (current.price || 0), 0) || 0;
+
+    // Consulta separada para ventas cerradas DURANTE el periodo (por closed_at, no created_at)
+    // Usamos status_id para identificar:
+    // - 142 = Ganado/Firmado (venta exitosa)
+    // - 143 = Ventas Perdidos/VENTA PERDIDA (venta perdida)
+    const fetchClosedLeadsInPeriod = async () => {
+        // Ventas ganadas: cerradas en el periodo y no perdidas (status_id = 142 es "Ganado/Firmado")
+        let queryGanadas = supabase
+            .from("leads")
+            .select("id, name, desarrollo, pipeline_name, price, closed_at, status_name, status_id")
+            .not("closed_at", "is", null)
+            .gte("closed_at", fromDate)
+            .lte("closed_at", toDate)
+            .eq("status_id", 142);  // 142 = Ganado/Firmado
+
+        // Aplicar filtros de pipeline (excluye Portal San Pedro automáticamente)
+        if (filters.tab === "remarketing") {
+            queryGanadas = queryGanadas.ilike("pipeline_name", "%RMKT%");
+        } else {
+            queryGanadas = queryGanadas.in("pipeline_id", MAIN_PIPELINES);
+        }
+
+        // Aplicar filtro de desarrollo
+        if (filters.desarrollo && filters.desarrollo !== "all") {
+            const d = filters.desarrollo.replace(" V2", "");
+            if (d.toLowerCase().includes("paraiso") || d.toLowerCase().includes("paraíso")) {
+                queryGanadas = queryGanadas.or(`desarrollo.ilike.%Paraiso%,pipeline_name.ilike.%Paraiso%,desarrollo.ilike.%Paraíso%,pipeline_name.ilike.%Paraíso%`);
+            } else {
+                queryGanadas = queryGanadas.or(`desarrollo.ilike.%${d}%,pipeline_name.ilike.%${d}%`);
+            }
+        }
+
+        if (filters.asesor && filters.asesor !== "all") {
+            queryGanadas = queryGanadas.eq("responsible_user_name", filters.asesor);
+        }
+
+        const ganadasData = await fetchAll(queryGanadas);
+        const ganadas = ganadasData.map(deriveDesarrollo);
+
+        // Ventas perdidas: cerradas en el periodo con status_id = 143 (Perdido)
+        let queryPerdidas = supabase
+            .from("leads")
+            .select("id, name, desarrollo, pipeline_name, price, closed_at, status_name, status_id")
+            .not("closed_at", "is", null)
+            .gte("closed_at", fromDate)
+            .lte("closed_at", toDate)
+            .eq("status_id", 143);  // 143 = Ventas Perdidos/VENTA PERDIDA
+
+        if (filters.tab === "remarketing") {
+            queryPerdidas = queryPerdidas.ilike("pipeline_name", "%RMKT%");
+        } else {
+            queryPerdidas = queryPerdidas.in("pipeline_id", MAIN_PIPELINES);
+        }
+
+        if (filters.desarrollo && filters.desarrollo !== "all") {
+            const d = filters.desarrollo.replace(" V2", "");
+            if (d.toLowerCase().includes("paraiso") || d.toLowerCase().includes("paraíso")) {
+                queryPerdidas = queryPerdidas.or(`desarrollo.ilike.%Paraiso%,pipeline_name.ilike.%Paraiso%,desarrollo.ilike.%Paraíso%,pipeline_name.ilike.%Paraíso%`);
+            } else {
+                queryPerdidas = queryPerdidas.or(`desarrollo.ilike.%${d}%,pipeline_name.ilike.%${d}%`);
+            }
+        }
+
+        if (filters.asesor && filters.asesor !== "all") {
+            queryPerdidas = queryPerdidas.eq("responsible_user_name", filters.asesor);
+        }
+
+        const perdidasData = await fetchAll(queryPerdidas);
+        const perdidas = perdidasData.map(deriveDesarrollo);
+
+        return { ganadas, perdidas };
+    };
+
+    const closedLeads = await fetchClosedLeadsInPeriod();
+    const ventasGanadas = closedLeads.ganadas;
+    const ventasPerdidas = closedLeads.perdidas;
+
+    // Agrupar ventas ganadas por desarrollo (excluir Portal San Pedro)
+    const ventasPorDesarrollo: Record<string, { count: number; monto: number; sinMonto: number }> = {};
+    let totalSinMonto = 0;
+
+    ventasGanadas.forEach((lead: any) => {
+        const desarrollo = lead.desarrollo || 'Sin desarrollo';
+
+        // Saltar si es Portal San Pedro
+        if (desarrollo.toLowerCase().includes('portal') || desarrollo.toLowerCase().includes('san pedro v2')) {
+            return;
+        }
+
+        if (!ventasPorDesarrollo[desarrollo]) {
+            ventasPorDesarrollo[desarrollo] = { count: 0, monto: 0, sinMonto: 0 };
+        }
+        ventasPorDesarrollo[desarrollo].count++;
+        if (lead.price && lead.price > 0) {
+            ventasPorDesarrollo[desarrollo].monto += lead.price;
+        } else {
+            ventasPorDesarrollo[desarrollo].sinMonto++;
+            totalSinMonto++;
+        }
+    });
+
+    const salesSummary = {
+        totalGanadas: ventasGanadas.length,
+        totalPerdidas: ventasPerdidas.length,
+        montoGanadas: ventasGanadas.reduce((sum: number, l: any) => sum + (l.price || 0), 0),
+        montoPerdidas: ventasPerdidas.reduce((sum: number, l: any) => sum + (l.price || 0), 0),
+        porDesarrollo: ventasPorDesarrollo,
+        sinMonto: totalSinMonto
+    };
 
     // Conteo de walk-ins (fuente = "Casa Muestra")
     const walkInLeads = current.data?.filter(lead => {
@@ -297,32 +430,86 @@ export async function getDashboardStats(filters: {
     };
 
     // Prepare charts data - Distribución por canal
-    // Prioridad: fuente (custom field) -> utm_source (tracking) -> "Sin clasificar"
-    const sourcesMap = current.data?.reduce((acc: any, curr) => {
-        // Usar fuente si existe, sino utm_source, sino "Sin clasificar"
-        let source = curr.fuente || curr.utm_source || "Sin clasificar";
+    // sourcesData: agrupado por source_type (para Dirección)
+    // sourcesDetailData: detallado por source_name individual (para Marketing)
+    const kommoSourcesMap: Record<number, { name: string | null; type: string | null }> = {};
+    (kommoSources || []).forEach((s: any) => {
+        kommoSourcesMap[s.source_id] = {
+            name: s.source_name,
+            type: s.source_type
+        };
+    });
 
-        // Normalizar algunos valores comunes de utm_source
-        if (!curr.fuente && curr.utm_source) {
-            const utmLower = curr.utm_source.toLowerCase();
-            if (utmLower.includes("facebook") || utmLower.includes("fb")) {
-                source = "Facebook Ads";
-            } else if (utmLower.includes("instagram") || utmLower.includes("ig")) {
-                source = "Instagram Ads";
-            } else if (utmLower.includes("google")) {
-                source = "Google Ads";
-            } else if (utmLower.includes("tiktok")) {
-                source = "TikTok";
-            } else {
-                source = curr.utm_source; // Mantener el valor original
-            }
+    // Mapa de usuarios para detectar "Creado por un Asesor"
+    const usersMap: Record<number, string> = {};
+    (usersData || []).forEach((u: any) => {
+        usersMap[u.id] = u.name;
+    });
+
+    // Datos AGRUPADOS por tipo (para Dirección)
+    const sourcesGroupedMap = current.data?.reduce((acc: any, curr) => {
+        let source: string;
+
+        if (curr.source_id && kommoSourcesMap[curr.source_id]) {
+            const mapped = kommoSourcesMap[curr.source_id];
+            // Si tiene tipo, usarlo. Si no, mostrar nombre o ID
+            source = mapped.type || mapped.name || `Fuente #${curr.source_id} (sin tipo)`;
+        } else if (curr.source_id) {
+            // source_id existe pero no está en kommo_sources
+            source = `Fuente #${curr.source_id} (sin tipo)`;
+        } else if (curr.fuente) {
+            // Usa el campo fuente del lead
+            source = curr.fuente;
+        } else if (curr.created_by && usersMap[curr.created_by]) {
+            // Lead creado manualmente por un asesor
+            source = "Creado por un Asesor";
+        } else {
+            // Lead sin source_id, sin fuente y sin created_by conocido
+            source = "Sin fuente identificada";
         }
 
         acc[source] = (acc[source] || 0) + 1;
         return acc;
     }, {});
-    const sourcesData = Object.entries(sourcesMap || {}).map(([name, value]) => ({ name, value }))
-        .sort((a: any, b: any) => b.value - a.value); // Ordenar por cantidad
+    const sourcesData = Object.entries(sourcesGroupedMap || {}).map(([name, value]) => ({ name, value }))
+        .sort((a: any, b: any) => b.value - a.value);
+
+    // Datos DETALLADOS por nombre individual (para Marketing)
+    const sourcesDetailMap = current.data?.reduce((acc: any, curr) => {
+        let source: string;
+        let type: string;
+
+        if (curr.source_id && kommoSourcesMap[curr.source_id]) {
+            const mapped = kommoSourcesMap[curr.source_id];
+            source = mapped.name || `Fuente #${curr.source_id}`;
+            type = mapped.type || `Fuente #${curr.source_id} (sin tipo)`;
+        } else if (curr.source_id) {
+            source = `Fuente #${curr.source_id}`;
+            type = `Fuente #${curr.source_id} (sin tipo)`;
+        } else if (curr.fuente) {
+            source = curr.fuente;
+            type = curr.fuente;
+        } else if (curr.created_by && usersMap[curr.created_by]) {
+            // Lead creado manualmente por un asesor - mostrar nombre del asesor
+            source = usersMap[curr.created_by];
+            type = "Creado por un Asesor";
+        } else {
+            source = `Lead ID: ${curr.id}`;
+            type = "Sin fuente identificada";
+        }
+
+        if (!acc[type]) acc[type] = {};
+        acc[type][source] = (acc[type][source] || 0) + 1;
+        return acc;
+    }, {});
+
+    // Convertir a formato para el chart de Marketing (agrupado por tipo, con detalle)
+    const sourcesDetailData = Object.entries(sourcesDetailMap || {}).map(([type, sources]: [string, any]) => ({
+        type,
+        sources: Object.entries(sources).map(([name, value]) => ({ name, value }))
+            .sort((a: any, b: any) => b.value - a.value),
+        total: Object.values(sources).reduce((sum: number, v: any) => sum + v, 0)
+    })).sort((a, b) => b.total - a.total);
 
     const dailyLeadsMap = current.data?.reduce((acc: any, curr) => {
         const dateObj = new Date(curr.created_at);
@@ -419,13 +606,15 @@ export async function getDashboardStats(filters: {
             qualifiedLeads,
             nonQualifiedLeads,
             budgetByDesarrollo,
-            trends
+            trends,
+            salesSummary
         },
         funnel,
         performance,
         marketing,
         remarketing: rmkt,
         sourcesData,
+        sourcesDetailData,
         dailyLeadsData,
         rawData: current.data,
         ...extraData // Añadir datos específicos según el tab
@@ -466,7 +655,6 @@ export async function getFilterOptions() {
     // La tabla users contiene el campo 'desarrollo' que indica a qué equipo pertenece cada asesor
     // Intentamos con desarrollo primero, si no existe la columna, hacemos fallback
     let usersData: any[] = [];
-    let hasDesarrolloColumn = true;
 
     const { data, error: usersError } = await supabase
         .from("users")
@@ -476,7 +664,7 @@ export async function getFilterOptions() {
     if (usersError) {
         // Si la columna desarrollo no existe, hacer query sin ella
         if (usersError.code === '42703') {
-            hasDesarrolloColumn = false;
+            // Column doesn't exist, try fallback
             const { data: fallbackData, error: fallbackError } = await supabase
                 .from("users")
                 .select("name, email, is_active")
@@ -653,9 +841,33 @@ export async function getLeadsByChannel(filters: {
     const fromDate = filters.dateRange?.from || startOfDay(subDays(new Date(), 30)).toISOString();
     const toDate = filters.dateRange?.to || endOfDay(new Date()).toISOString();
 
+    // 1. Obtener kommo_sources para mapear source_id a tipo
+    const { data: kommoSources } = await supabase
+        .from("kommo_sources")
+        .select("source_id, source_name, source_type");
+
+    const kommoSourcesMap: Record<number, { name: string | null; type: string | null }> = {};
+    (kommoSources || []).forEach((s: any) => {
+        kommoSourcesMap[s.source_id] = {
+            name: s.source_name,
+            type: s.source_type
+        };
+    });
+
+    // 1b. Obtener usuarios para mapear created_by a nombre
+    const { data: usersData } = await supabase
+        .from("users")
+        .select("id, name");
+
+    const usersMap: Record<number, string> = {};
+    (usersData || []).forEach((u: any) => {
+        usersMap[u.id] = u.name;
+    });
+
+    // 2. Obtener leads con source_id y created_by
     let query = supabase
         .from("leads")
-        .select("fuente, desarrollo, pipeline_name, id, is_cita_agendada, status_name, price")
+        .select("source_id, created_by, fuente, desarrollo, pipeline_name, id, is_cita_agendada, status_name, price")
         .gte("created_at", fromDate)
         .lte("created_at", toDate)
         .in("pipeline_id", MAIN_PIPELINES);
@@ -669,28 +881,93 @@ export async function getLeadsByChannel(filters: {
     const rawData = await fetchAll(query);
     const data = rawData.map(deriveDesarrollo);
 
-    // Agrupar por canal
-    const byChannel = data.reduce((acc: any, lead) => {
-        const canal = lead.fuente || "Orgánico";
-        if (!acc[canal]) {
-            acc[canal] = {
+    // 3. Agrupar por tipo y luego por canal
+    const byTypeAndChannel: Record<string, Record<string, any>> = {};
+
+    data.forEach(lead => {
+        let tipo: string;
+        let canal: string;
+
+        if (lead.source_id && kommoSourcesMap[lead.source_id]) {
+            const mapped = kommoSourcesMap[lead.source_id];
+            tipo = mapped.type || "Sin tipo asignado";
+            canal = mapped.name || `Fuente #${lead.source_id}`;
+        } else if (lead.source_id) {
+            // source_id existe pero no está en kommo_sources
+            tipo = "Sin tipo asignado";
+            canal = `Fuente #${lead.source_id}`;
+        } else if (lead.fuente) {
+            tipo = lead.fuente;
+            canal = lead.fuente;
+        } else if (lead.created_by && usersMap[lead.created_by]) {
+            // Lead creado manualmente por un asesor
+            tipo = "Creado por un Asesor";
+            canal = usersMap[lead.created_by];
+        } else {
+            // Lead sin source_id, sin fuente y sin created_by conocido
+            tipo = "Sin fuente identificada";
+            canal = "Sin fuente identificada";
+        }
+
+        if (!byTypeAndChannel[tipo]) {
+            byTypeAndChannel[tipo] = {};
+        }
+
+        if (!byTypeAndChannel[tipo][canal]) {
+            byTypeAndChannel[tipo][canal] = {
                 canal,
                 total_leads: 0,
                 citas: 0,
                 apartados: 0,
-                monto_total: 0
+                monto_proyectado: 0,  // Suma de todos los leads con precio
+                monto_apartados: 0     // Solo apartados
             };
         }
-        acc[canal].total_leads++;
-        if (lead.is_cita_agendada) acc[canal].citas++;
-        if (lead.status_name === "Apartado Realizado" || lead.status_name === "Apartado") {
-            acc[canal].apartados++;
-            acc[canal].monto_total += lead.price || 0;
-        }
-        return acc;
-    }, {});
 
-    return Object.values(byChannel);
+        byTypeAndChannel[tipo][canal].total_leads++;
+        byTypeAndChannel[tipo][canal].monto_proyectado += lead.price || 0;  // Sumar precio de todos
+        if (lead.is_cita_agendada) byTypeAndChannel[tipo][canal].citas++;
+        if (lead.status_name === "Apartado Realizado" || lead.status_name === "Apartado") {
+            byTypeAndChannel[tipo][canal].apartados++;
+            byTypeAndChannel[tipo][canal].monto_apartados += lead.price || 0;
+        }
+    });
+
+    // 4. Convertir a estructura plana para compatibilidad + estructura agrupada
+    const flatResult: any[] = [];
+    const groupedResult: any[] = [];
+
+    Object.entries(byTypeAndChannel).forEach(([tipo, canales]) => {
+        const canalArray = Object.values(canales).sort((a: any, b: any) => b.total_leads - a.total_leads);
+
+        // Calcular totales del tipo
+        const tipoTotals = canalArray.reduce((acc: any, c: any) => ({
+            total_leads: acc.total_leads + c.total_leads,
+            citas: acc.citas + c.citas,
+            apartados: acc.apartados + c.apartados,
+            monto_proyectado: acc.monto_proyectado + c.monto_proyectado,
+            monto_apartados: acc.monto_apartados + c.monto_apartados
+        }), { total_leads: 0, citas: 0, apartados: 0, monto_proyectado: 0, monto_apartados: 0 });
+
+        groupedResult.push({
+            tipo,
+            ...tipoTotals,
+            canales: canalArray
+        });
+
+        // También agregar al resultado plano para compatibilidad
+        canalArray.forEach((c: any) => {
+            flatResult.push({ ...c, tipo });
+        });
+    });
+
+    // Ordenar grupos por total de leads
+    groupedResult.sort((a, b) => b.total_leads - a.total_leads);
+
+    return {
+        flat: flatResult.sort((a, b) => b.total_leads - a.total_leads),
+        grouped: groupedResult
+    };
 }
 
 /**
@@ -791,6 +1068,24 @@ export async function getAdvisorPerformance(filters: {
 
     const leadsData = await fetchAll(leadsQuery);
 
+    // 2b. Obtener leads cerrados (ganados y perdidos) para el periodo si hay fechas
+    let closedLeadsData: any[] = [];
+    if (filters.dateRange?.from && filters.dateRange?.to) {
+        let closedQuery = supabase
+            .from("leads")
+            .select("id, responsible_user_name, pipeline_name, status_name, closed_at, price")
+            .in("pipeline_id", MAIN_PIPELINES)
+            .not("closed_at", "is", null)
+            .gte("closed_at", filters.dateRange.from)
+            .lte("closed_at", filters.dateRange.to);
+
+        if (filters.asesor && filters.asesor !== "all") {
+            closedQuery = closedQuery.eq("responsible_user_name", filters.asesor);
+        }
+
+        closedLeadsData = await fetchAll(closedQuery);
+    }
+
     // 3. Agrupar por asesor y contar por etapa
     const performanceMap: { [key: string]: any } = {};
 
@@ -819,7 +1114,10 @@ export async function getAdvisorPerformance(filters: {
                 cancelacion_no_show: 0,
                 negociacion_activa: 0,
                 apartado_realizado: 0,
-                cliente_futuro: 0
+                cliente_futuro: 0,
+                leads_ganados: 0,
+                leads_perdidos: 0,
+                monto_ganado: 0
             };
         }
 
@@ -845,6 +1143,47 @@ export async function getAdvisorPerformance(filters: {
         }
         // Nota: Las etapas no listadas (como "Incoming leads", "Primer contacto", etc.)
         // se cuentan en total_leads pero no en ninguna etapa específica
+    });
+
+    // 3b. Agregar leads cerrados (ganados/perdidos) al performanceMap
+    closedLeadsData.forEach(lead => {
+        const asesor = lead.responsible_user_name || "Sin asignar";
+        const desarrollo = asesorToDesarrollo[asesor] || "Sin equipo";
+
+        // Aplicar filtro de desarrollo si está activo
+        if (filters.desarrollo && filters.desarrollo !== "all") {
+            if (desarrollo !== filters.desarrollo) {
+                return;
+            }
+        }
+
+        const key = `${asesor}|${desarrollo}`;
+
+        if (!performanceMap[key]) {
+            performanceMap[key] = {
+                asesor,
+                desarrollo,
+                total_leads: 0,
+                para_seguimiento_manual: 0,
+                en_seguimiento_manual: 0,
+                cita_agendada: 0,
+                cancelacion_no_show: 0,
+                negociacion_activa: 0,
+                apartado_realizado: 0,
+                cliente_futuro: 0,
+                leads_ganados: 0,
+                leads_perdidos: 0,
+                monto_ganado: 0
+            };
+        }
+
+        const isLost = lead.status_id === 143;  // 143 = Ventas Perdidos/VENTA PERDIDA
+        if (isLost) {
+            performanceMap[key].leads_perdidos++;
+        } else {
+            performanceMap[key].leads_ganados++;
+            performanceMap[key].monto_ganado += lead.price || 0;
+        }
     });
 
     // 4. Convertir a array y ordenar

@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { KPIStatsCards } from "./StatCards";
 import { LeadsChart } from "./LeadsChart";
 import { SourcesChart } from "./SourcesChart";
+import { SourcesDetailChart } from "./SourcesDetailChart";
 import { AdvisorPerformance } from "./AdvisorPerformance";
-import { MarketingSpendChart } from "./MarketingSpendChart";
 import { WalkInsTable } from "./WalkInsTable";
-import { Building2, UserCircle, Loader2, ChevronDown, Filter, Users } from "lucide-react";
+import { Building2, UserCircle, Loader2, ChevronDown, Filter, Users, TrendingUp, TrendingDown } from "lucide-react";
+import { AccordionSection } from "./AccordionSection";
 import { startOfDay, subDays, endOfDay, startOfMonth, format } from "date-fns";
 import { DateRangePicker } from "./DateRangePicker";
 
@@ -222,9 +223,110 @@ export default function DashboardView({
                     {/* ============================================ */}
                     {tab === "direccion" && (
                         <>
-                            {/* Distribución por Canal de Adquisición */}
-                            <div className="grid grid-cols-1 gap-6">
+                            {/* Nota informativa sobre citas */}
+                            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                                <p className="text-sm text-blue-700">
+                                    <strong>Nota:</strong> Las citas y visitados mostrados corresponden a leads donde el checkbox fue marcado durante el periodo seleccionado.
+                                </p>
+                            </div>
+
+                            {/* Ventas del Periodo */}
+                            {stats.summary?.salesSummary && stats.summary.salesSummary.totalGanadas > 0 && (
+                                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-900">Ventas del Periodo</h3>
+                                            <p className="text-sm text-slate-500">Leads cerrados como ganados</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp className="text-green-500" size={20} />
+                                            <span className="text-2xl font-bold text-green-600">{stats.summary.salesSummary.totalGanadas}</span>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {Object.entries(stats.summary.salesSummary.porDesarrollo || {}).map(([desarrollo, data]: [string, any]) => (
+                                            <div key={desarrollo} className="bg-slate-50 rounded-xl p-4">
+                                                <p className="text-sm font-medium text-slate-600">{desarrollo}</p>
+                                                <p className="text-xl font-bold text-slate-900">{data.count} ventas</p>
+                                                <p className="text-sm text-green-600 font-semibold">
+                                                    ${data.monto.toLocaleString("es-MX")}
+                                                    {data.sinMonto > 0 && <span className="text-amber-600">*</span>}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-slate-100">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm text-slate-500">Monto total de ventas</span>
+                                            <span className="text-xl font-bold text-green-600">
+                                                ${stats.summary.salesSummary.montoGanadas?.toLocaleString("es-MX") || 0}
+                                            </span>
+                                        </div>
+                                        {stats.summary.salesSummary.sinMonto > 0 && (
+                                            <p className="text-xs text-amber-600 mt-2">
+                                                * {stats.summary.salesSummary.sinMonto} venta(s) sin monto asignado
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Distribución por Tipo de Canal */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Gráfico de barras por tipo */}
                                 <SourcesChart data={stats.sourcesData} />
+
+                                {/* Tabla resumen por tipo de canal */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                    <div className="mb-4">
+                                        <h3 className="text-lg font-bold text-slate-900">Resumen por Tipo de Canal</h3>
+                                        <p className="text-sm text-slate-500">Leads agrupados por categoría</p>
+                                    </div>
+                                    {/* Nota informativa */}
+                                    <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                                        <p className="text-xs text-blue-700">
+                                            <strong>Nota:</strong> Facebook Leads Ads y WhatsApp Business pueden contener leads similares.
+                                            Algunos prospectos entran directo por WhatsApp sin ser detectados como campaña.
+                                        </p>
+                                    </div>
+                                    <div className="overflow-y-auto max-h-[320px]">
+                                        <table className="min-w-full divide-y divide-slate-100">
+                                            <thead className="bg-slate-50/50 sticky top-0">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase">Tipo de Canal</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase">Leads</th>
+                                                    <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase">%</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {stats.sourcesData && stats.sourcesData.length > 0 ? (
+                                                    (() => {
+                                                        const total = stats.sourcesData.reduce((sum: number, s: any) => sum + s.value, 0);
+                                                        return stats.sourcesData.map((source: any, idx: number) => (
+                                                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                                <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                                                                    {source.name}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm text-right font-semibold text-slate-700">
+                                                                    {source.value.toLocaleString()}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-sm text-right text-slate-500">
+                                                                    {total > 0 ? ((source.value / total) * 100).toFixed(1) : 0}%
+                                                                </td>
+                                                            </tr>
+                                                        ));
+                                                    })()
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={3} className="px-4 py-8 text-center text-slate-400">
+                                                            No hay datos disponibles
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </>
                     )}
@@ -234,6 +336,68 @@ export default function DashboardView({
                     {/* ============================================ */}
                     {tab === "ventas" && (
                         <>
+                            {/* Ventas del Periodo */}
+                            {stats.summary?.salesSummary && (stats.summary.salesSummary.totalGanadas > 0 || stats.summary.salesSummary.totalPerdidas > 0) && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-white p-6 rounded-3xl border border-green-100 shadow-sm">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-slate-900">Ventas Ganadas</h3>
+                                                <p className="text-sm text-slate-500">Leads cerrados exitosamente</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <TrendingUp className="text-green-500" size={24} />
+                                                <span className="text-3xl font-bold text-green-600">{stats.summary.salesSummary.totalGanadas}</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {Object.entries(stats.summary.salesSummary.porDesarrollo || {}).map(([desarrollo, data]: [string, any]) => (
+                                                <div key={desarrollo} className="flex justify-between items-center bg-green-50 rounded-lg p-3">
+                                                    <span className="text-sm font-medium text-slate-700">{desarrollo}</span>
+                                                    <div className="text-right">
+                                                        <span className="text-sm font-bold text-green-700">{data.count}</span>
+                                                        <span className="text-xs text-slate-500 ml-2">
+                                                            ${data.monto.toLocaleString("es-MX")}
+                                                            {data.sinMonto > 0 && <span className="text-amber-600">*</span>}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="mt-4 pt-4 border-t border-green-100">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-medium text-slate-600">Monto Total</span>
+                                                <span className="text-xl font-bold text-green-600">
+                                                    ${stats.summary.salesSummary.montoGanadas?.toLocaleString("es-MX") || 0}
+                                                </span>
+                                            </div>
+                                            {stats.summary.salesSummary.sinMonto > 0 && (
+                                                <p className="text-xs text-amber-600 mt-2">
+                                                    * {stats.summary.salesSummary.sinMonto} venta(s) sin monto asignado
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-3xl border border-red-100 shadow-sm">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <h3 className="text-lg font-bold text-slate-900">Ventas Perdidas</h3>
+                                                <p className="text-sm text-slate-500">Leads cerrados sin venta</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <TrendingDown className="text-red-500" size={24} />
+                                                <span className="text-3xl font-bold text-red-600">{stats.summary.salesSummary.totalPerdidas}</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-red-50 rounded-lg p-4">
+                                            <p className="text-sm text-red-700">
+                                                Monto perdido: <span className="font-bold">${stats.summary.salesSummary.montoPerdidas?.toLocaleString("es-MX") || 0}</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* KPI #10: Walk-ins */}
                             {stats.walkIns && stats.walkIns.length > 0 && (
                                 <WalkInsTable data={stats.walkIns} />
@@ -241,7 +405,8 @@ export default function DashboardView({
 
                             {/* Leads por etapa del pipeline - Rendimiento de asesores por desarrollo */}
                             {stats.advisorPerformanceDetailed && stats.advisorPerformanceDetailed.length > 0 ? (
-                                <div className="space-y-6">
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-bold text-slate-900">Inventario de Leads por Asesor</h3>
                                     {["Bosques de Cholul", "Cumbres de San Pedro", "Paraíso Caucel"].map((desarrollo) => {
                                         const asesoresDesarrollo = stats.advisorPerformanceDetailed.filter(
                                             (row: any) => row.desarrollo === desarrollo
@@ -259,70 +424,102 @@ export default function DashboardView({
                                             negociacion_activa: (acc.negociacion_activa || 0) + (row.negociacion_activa || 0),
                                             apartado_realizado: (acc.apartado_realizado || 0) + (row.apartado_realizado || 0),
                                             cliente_futuro: (acc.cliente_futuro || 0) + (row.cliente_futuro || 0),
+                                            leads_ganados: (acc.leads_ganados || 0) + (row.leads_ganados || 0),
+                                            leads_perdidos: (acc.leads_perdidos || 0) + (row.leads_perdidos || 0),
+                                            monto_ganado: (acc.monto_ganado || 0) + (row.monto_ganado || 0),
                                         }), {});
 
                                         return (
-                                            <div key={desarrollo} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                                                <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-                                                    <div>
-                                                        <h3 className="text-lg font-bold text-slate-900">
-                                                            {desarrollo}
-                                                        </h3>
-                                                        <p className="text-sm text-slate-500">Total: {totales.total_leads} leads activos</p>
+                                            <AccordionSection
+                                                key={desarrollo}
+                                                title={desarrollo}
+                                                subtitle={`${totales.total_leads} leads activos (no se aplica filtro de periodo)`}
+                                                badge={{ text: "Inventario actual", color: "bg-amber-100 text-amber-700" }}
+                                                headerRight={
+                                                    <div className="flex items-center gap-4 text-sm">
+                                                        {totales.leads_ganados > 0 && (
+                                                            <div className="flex items-center gap-1">
+                                                                <TrendingUp className="text-green-500" size={14} />
+                                                                <span className="font-bold text-green-600">{totales.leads_ganados}</span>
+                                                            </div>
+                                                        )}
+                                                        {totales.leads_perdidos > 0 && (
+                                                            <div className="flex items-center gap-1">
+                                                                <TrendingDown className="text-red-500" size={14} />
+                                                                <span className="font-bold text-red-600">{totales.leads_perdidos}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <span className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full">
-                                                        📊 Números actuales (sin filtro de fecha)
-                                                    </span>
-                                                </div>
+                                                }
+                                            >
                                                 <div className="overflow-x-auto">
-                                                    <table className="min-w-full divide-y divide-gray-200">
+                                                    <table className="w-full table-fixed">
+                                                        <colgroup>
+                                                            <col className="w-[140px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[70px]" />
+                                                            <col className="w-[70px]" />
+                                                            <col className="w-[60px]" />
+                                                            <col className="w-[60px]" />
+                                                        </colgroup>
                                                         <thead className="bg-slate-50/50">
                                                             <tr>
-                                                                <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Asesor</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Para Seg.</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">En Seg.</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cita</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cancel.</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Negoc.</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Apartado</th>
-                                                                <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cli. Futuro</th>
+                                                                <th className="px-3 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Asesor</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">P.Seg</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">E.Seg</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cita</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cancel</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Negoc</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Apartado</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">C.Futuro</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-green-600 uppercase tracking-wider bg-green-50">Ganados</th>
+                                                                <th className="px-2 py-3 text-center text-[10px] font-bold text-red-600 uppercase tracking-wider bg-red-50">Perdidos</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-slate-50">
                                                             {asesoresDesarrollo.map((row: any, idx: number) => (
                                                                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                                    <td className="px-4 py-3 text-sm font-semibold text-slate-900">{row.asesor || "Sin asignar"}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center font-bold text-slate-900">{row.total_leads || 0}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center text-slate-600">{row.para_seguimiento_manual || 0}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center text-slate-600">{row.en_seguimiento_manual || 0}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{row.cita_agendada || 0}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center text-orange-600">{row.cancelacion_no_show || 0}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center text-purple-600 font-semibold">{row.negociacion_activa || 0}</td>
-                                                                    <td className="px-4 py-3 text-sm text-center">
-                                                                        <span className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs font-bold">
+                                                                    <td className="px-3 py-3 text-sm font-semibold text-slate-900 truncate">{row.asesor || "Sin asignar"}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center font-bold text-slate-900">{row.total_leads || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center text-slate-600">{row.para_seguimiento_manual || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center text-slate-600">{row.en_seguimiento_manual || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center text-blue-600 font-semibold">{row.cita_agendada || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center text-orange-600">{row.cancelacion_no_show || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center text-purple-600 font-semibold">{row.negociacion_activa || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center">
+                                                                        <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-bold">
                                                                             {row.apartado_realizado || 0}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-sm text-center text-slate-500">{row.cliente_futuro || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center text-slate-500">{row.cliente_futuro || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center font-bold text-green-600 bg-green-50/50">{row.leads_ganados || 0}</td>
+                                                                    <td className="px-2 py-3 text-sm text-center font-bold text-red-600 bg-red-50/50">{row.leads_perdidos || 0}</td>
                                                                 </tr>
                                                             ))}
                                                             {/* Fila de totales */}
                                                             <tr className="bg-slate-100 font-bold">
-                                                                <td className="px-4 py-3 text-sm text-slate-900">TOTAL</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-slate-900">{totales.total_leads || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-slate-700">{totales.para_seguimiento_manual || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-slate-700">{totales.en_seguimiento_manual || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-blue-700">{totales.cita_agendada || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-orange-700">{totales.cancelacion_no_show || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-purple-700">{totales.negociacion_activa || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-green-700">{totales.apartado_realizado || 0}</td>
-                                                                <td className="px-4 py-3 text-sm text-center text-slate-700">{totales.cliente_futuro || 0}</td>
+                                                                <td className="px-3 py-3 text-sm text-slate-900">TOTAL</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-slate-900">{totales.total_leads || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-slate-700">{totales.para_seguimiento_manual || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-slate-700">{totales.en_seguimiento_manual || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-blue-700">{totales.cita_agendada || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-orange-700">{totales.cancelacion_no_show || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-purple-700">{totales.negociacion_activa || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-green-700">{totales.apartado_realizado || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-slate-700">{totales.cliente_futuro || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-green-700 bg-green-100">{totales.leads_ganados || 0}</td>
+                                                                <td className="px-2 py-3 text-sm text-center text-red-700 bg-red-100">{totales.leads_perdidos || 0}</td>
                                                             </tr>
                                                         </tbody>
                                                     </table>
                                                 </div>
-                                            </div>
+                                            </AccordionSection>
                                         );
                                     })}
                                 </div>
@@ -337,8 +534,130 @@ export default function DashboardView({
                     {/* ============================================ */}
                     {tab === "marketing" && (
                         <>
-                            {/* Tabla de Leads por Canal de Adquisición */}
-                            {stats.leadsByChannel && stats.leadsByChannel.length > 0 ? (
+                            {/* Distribución por Canal - Gráfico */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <SourcesChart data={stats.sourcesData} title="Distribución por Canal" />
+
+                                {/* Ventas del Periodo (mismo que Dirección) */}
+                                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-900">Ventas del Periodo</h3>
+                                            <p className="text-sm text-slate-500">Leads cerrados como ganados</p>
+                                        </div>
+                                        {stats.summary?.salesSummary && (
+                                            <div className="flex items-center gap-2">
+                                                <TrendingUp className="text-green-500" size={20} />
+                                                <span className="text-2xl font-bold text-green-600">{stats.summary.salesSummary.totalGanadas}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {stats.summary?.salesSummary && stats.summary.salesSummary.totalGanadas > 0 ? (
+                                        <>
+                                            <div className="space-y-2">
+                                                {Object.entries(stats.summary.salesSummary.porDesarrollo || {}).map(([desarrollo, data]: [string, any]) => (
+                                                    <div key={desarrollo} className="flex justify-between items-center bg-green-50 rounded-lg p-3">
+                                                        <span className="text-sm font-medium text-slate-700">{desarrollo}</span>
+                                                        <div className="text-right">
+                                                            <span className="text-sm font-bold text-green-700">{data.count}</span>
+                                                            <span className="text-xs text-slate-500 ml-2">
+                                                                ${data.monto.toLocaleString("es-MX")}
+                                                                {data.sinMonto > 0 && <span className="text-amber-600">*</span>}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="mt-4 pt-4 border-t border-slate-100">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm font-medium text-slate-600">Monto Total</span>
+                                                    <span className="text-xl font-bold text-green-600">
+                                                        ${stats.summary.salesSummary.montoGanadas?.toLocaleString("es-MX") || 0}
+                                                    </span>
+                                                </div>
+                                                {stats.summary.salesSummary.sinMonto > 0 && (
+                                                    <p className="text-xs text-amber-600 mt-2">
+                                                        * {stats.summary.salesSummary.sinMonto} venta(s) sin monto asignado
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="text-center py-8 text-slate-400">
+                                            <p>No hay ventas cerradas en este periodo</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Estadísticas por Tipo de Canal - Accordions */}
+                            {stats.leadsByChannel?.grouped && stats.leadsByChannel.grouped.length > 0 ? (
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-bold text-slate-900">Detalle por Tipo de Canal</h3>
+                                    {stats.leadsByChannel.grouped.map((tipoGroup: any) => (
+                                        <AccordionSection
+                                            key={tipoGroup.tipo}
+                                            title={tipoGroup.tipo}
+                                            subtitle={`${tipoGroup.canales?.length || 0} canales`}
+                                            headerRight={
+                                                <div className="flex items-center gap-6 text-sm">
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-blue-600">{tipoGroup.total_leads}</div>
+                                                        <div className="text-xs text-slate-500">Leads</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-slate-700">{tipoGroup.citas}</div>
+                                                        <div className="text-xs text-slate-500">Citas</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-green-600">{tipoGroup.apartados}</div>
+                                                        <div className="text-xs text-slate-500">Apartados</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-slate-900">${(tipoGroup.monto_proyectado || 0).toLocaleString("es-MX")}</div>
+                                                        <div className="text-xs text-slate-500">Monto Proy.</div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        >
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full table-fixed">
+                                                    <colgroup>
+                                                        <col className="w-[40%]" />
+                                                        <col className="w-[15%]" />
+                                                        <col className="w-[15%]" />
+                                                        <col className="w-[15%]" />
+                                                        <col className="w-[15%]" />
+                                                    </colgroup>
+                                                    <thead className="bg-slate-50/50">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Canal</th>
+                                                            <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Leads</th>
+                                                            <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Citas</th>
+                                                            <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Apartados</th>
+                                                            <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Monto Proy.</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-slate-50">
+                                                        {tipoGroup.canales.map((row: any, idx: number) => (
+                                                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                                <td className="px-6 py-3 text-sm font-medium text-slate-800 truncate">{row.canal}</td>
+                                                                <td className="px-6 py-3 text-sm text-center font-semibold text-blue-600">{row.total_leads || 0}</td>
+                                                                <td className="px-6 py-3 text-sm text-center text-slate-600">{row.citas || 0}</td>
+                                                                <td className="px-6 py-3 text-sm text-center text-slate-600">{row.apartados || 0}</td>
+                                                                <td className="px-6 py-3 text-sm text-right font-mono text-slate-700">
+                                                                    ${(row.monto_proyectado || 0).toLocaleString("es-MX")}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </AccordionSection>
+                                    ))}
+                                </div>
+                            ) : stats.leadsByChannel && Array.isArray(stats.leadsByChannel) && stats.leadsByChannel.length > 0 ? (
+                                /* Fallback para compatibilidad con formato anterior */
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                                     <div className="p-6 border-b border-slate-50">
                                         <h3 className="text-lg font-bold text-slate-900">Leads por Canal de Adquisición</h3>
@@ -432,10 +751,14 @@ export default function DashboardView({
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 gap-6">
                                 <LeadsChart data={stats.dailyLeadsData} />
-                                <SourcesChart data={stats.sourcesData} />
                             </div>
+
+                            {/* Detalle de Fuentes por Tipo */}
+                            {stats.sourcesDetailData && stats.sourcesDetailData.length > 0 && (
+                                <SourcesDetailChart data={stats.sourcesDetailData} />
+                            )}
                         </>
                     )}
 
